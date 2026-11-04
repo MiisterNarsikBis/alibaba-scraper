@@ -18,6 +18,7 @@ import config
 MAX_ENTRIES = 5000
 _store = {}
 _lock = threading.Lock()
+_last_cache_hit = False
 
 
 class DontCache:
@@ -32,6 +33,8 @@ def _key(namespace, data):
 
 
 def cached_call(namespace, data, fn, ttl, cache=True):
+    global _last_cache_hit
+    _last_cache_hit = False
     if not (config.CACHE_ENABLED and cache and ttl):
         result = fn(**data)
         return result.data if isinstance(result, DontCache) else result
@@ -40,6 +43,7 @@ def cached_call(namespace, data, fn, ttl, cache=True):
     with _lock:
         hit = _store.get(key)
         if hit and hit[0] > now:
+            _last_cache_hit = True
             return deepcopy(hit[1])
     result = fn(**data)
     if isinstance(result, DontCache):
@@ -52,6 +56,11 @@ def cached_call(namespace, data, fn, ttl, cache=True):
                 del _store[next(iter(_store))]
         _store[key] = (now + ttl.total_seconds(), deepcopy(result))
     return result
+
+
+def was_cache_hit():
+    """Return whether the most recent cached_call() returned from cache."""
+    return _last_cache_hit
 
 
 def clear():

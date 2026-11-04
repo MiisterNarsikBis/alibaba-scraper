@@ -5,13 +5,15 @@ map the failure taxonomy to HTTP, and add gateway-style pagination links
 the caller's own query params.
 """
 import json
+import time
 from urllib.parse import urlencode
 
 from bottle import request, response, route
 
-from cache import cached_call
+from cache import cached_call, was_cache_hit
 from scraper_errors import BadRequest, Blocked, NotFound, UpstreamError
 from schema_fields import load_query
+import usage_log
 
 
 def json_response(data, status=200):
@@ -77,27 +79,63 @@ def route_call(schema_cls, impl, *, site, path, paginated=False, cache_ttl=None)
     label = f"{site} {path.strip('/').replace(site + '/', '', 1)}"
     raw = query_dict()
     data, error = load_query(schema_cls, raw)
+    started = time.time()
     if error:
+        usage_log.record(
+            endpoint=label, params=raw, cache_hit=False, status=400,
+            duration_ms=(time.time() - started) * 1000, error=str(error)[:200],
+        )
         return json_response(error, 400)
     try:
         if cache_ttl:
             result = cached_call(f"{site}.{impl.__name__}", data, impl, cache_ttl)
+            cache_hit = was_cache_hit()
         else:
             result = impl(**data)
+            cache_hit = False
     except ValueError as e:
+        usage_log.record(
+            endpoint=label, params=raw, cache_hit=False, status=400,
+            duration_ms=(time.time() - started) * 1000, error=str(e)[:200],
+        )
         return json_response({"error": str(e)}, 400)
     except BadRequest as e:
+        usage_log.record(
+            endpoint=label, params=raw, cache_hit=False, status=400,
+            duration_ms=(time.time() - started) * 1000, error=str(e)[:200],
+        )
         return json_response({"error": f"{site} rejected the request: {e}"}, 400)
     except NotFound as e:
+        usage_log.record(
+            endpoint=label, params=raw, cache_hit=False, status=404,
+            duration_ms=(time.time() - started) * 1000, error=str(e)[:200],
+        )
         return json_response({"error": str(e) or "not found"}, 404)
     except Blocked as e:
+        usage_log.record(
+            endpoint=label, params=raw, cache_hit=False, status=502,
+            duration_ms=(time.time() - started) * 1000, error=f"blocked: {e}"[:200],
+        )
         return json_response({"error": f"{site} blocked the request, retry later: {e}"}, 502)
     except UpstreamError as e:
+        usage_log.record(
+            endpoint=label, params=raw, cache_hit=False, status=502,
+            duration_ms=(time.time() - started) * 1000, error=str(e)[:200],
+        )
         return json_response({"error": f"{label} failed: {e}"}, 502)
     except Exception as e:
+        usage_log.record(
+            endpoint=label, params=raw, cache_hit=False, status=500,
+            duration_ms=(time.time() - started) * 1000,
+            error=f"{type(e).__name__}: {e}"[:200],
+        )
         return json_response({"error": f"{label} failed: {type(e).__name__}: {e}"}, 500)
     if paginated:
         result = paginate(result, path, raw, public_base())
+    usage_log.record(
+        endpoint=label, params=raw, cache_hit=cache_hit, status=200,
+        duration_ms=(time.time() - started) * 1000,
+    )
     return json_response(result)
 
 

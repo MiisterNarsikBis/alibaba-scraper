@@ -1,7 +1,7 @@
 """The 12 Alibaba endpoints. Every path is served with and without the
 `/alibaba` prefix, so code generated against the hosted API on RapidAPI
 (paths like /products/search) runs unchanged against this server."""
-from bottle import route
+from bottle import route, request
 
 from alibaba import cache_config as ttl
 from alibaba import schemas
@@ -10,6 +10,7 @@ from alibaba.product import product_details, product_reviews
 from alibaba.search import search_by_image, search_products, search_suppliers
 from alibaba.supplier import supplier_details, supplier_products, supplier_reviews
 from route_glue import json_response, route_table
+import usage_log
 
 ENDPOINTS = [
     # path, schema, impl, paginated, cache ttl
@@ -37,3 +38,33 @@ for _path, _schema, _impl, _paginated, _cache in ENDPOINTS:
 @route("/health", method="GET")
 def health():
     return json_response({"status": "ok", "endpoints": [p for p, *_ in ENDPOINTS]})
+
+
+# Usage log: registered both under /usage and /alibaba/usage to mirror the
+# other endpoints. No schema validation — these are admin endpoints, no query
+# params other than `limit` on /usage/recent.
+def _usage_stats():
+    return json_response(usage_log.stats())
+
+
+def _usage_recent():
+    raw = {key: request.query.getunicode(key) for key in request.query.keys()}
+    try:
+        limit = max(1, min(int(raw.get("limit") or 100), 1000))
+    except (TypeError, ValueError):
+        limit = 100
+    return json_response({"entries": usage_log.snapshot(limit)})
+
+
+def _usage_clear():
+    usage_log.clear()
+    return json_response({"cleared": True})
+
+
+for _path, _handler in (
+    ("/usage", _usage_stats),
+    ("/usage/recent", _usage_recent),
+    ("/usage/clear", _usage_clear),
+):
+    route(_path, method="GET")(_handler)
+    route("/alibaba" + _path, method="GET")(_handler)

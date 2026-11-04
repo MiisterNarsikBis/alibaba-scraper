@@ -33,15 +33,16 @@ Intentionally skipped raw fields (and why):
   categories      imageUrl action/searchUrl variants (one link kept), dotName
 """
 import html as _html
+import json
 import math
 import re
 from datetime import datetime, timezone
 
 BASE = "https://www.alibaba.com"
 
-SEARCH_PAGE_SIZE = 48
+SEARCH_PAGE_SIZE = 30
 SEARCH_MAX_PAGES = 100
-SUPPLIER_PAGE_SIZE = 20
+SUPPLIER_PAGE_SIZE = 30
 STORE_PAGE_SIZE = 16
 
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -53,7 +54,7 @@ _INT_RE = re.compile(r"\d+")
 # "₹2,976.80-3,307.34"). Ambiguous symbols (¥, kr) are resolved by the
 # requested currency when the caller passed one.
 _SYMBOLS = [
-    ("US $", "USD"), ("HK$", "HKD"), ("NT$", "TWD"), ("S$", "SGD"), ("A$", "AUD"),
+    ("US $", "USD"), ("US$", "USD"), ("HK$", "HKD"), ("NT$", "TWD"), ("S$", "SGD"), ("A$", "AUD"),
     ("C$", "CAD"), ("R$", "BRL"), ("MX$", "MXN"), ("NZ$", "NZD"), ("CHF", "CHF"),
     ("₹", "INR"), ("€", "EUR"), ("£", "GBP"), ("₩", "KRW"), ("₽", "RUB"), ("₺", "TRY"),
     ("zł", "PLN"), ("฿", "THB"), ("₫", "VND"), ("Rp", "IDR"), ("₱", "PHP"), ("RM", "MYR"),
@@ -1169,6 +1170,65 @@ def _fv(obj, *keys):
     return cur
 
 
+def _parse_main_markets(raw):
+    """Extract main markets from the various shapes the company overview module
+    exposes. Returns a list of {"market": str, "percent": float|None} dicts.
+    Order is preserved (most prominent first, when percentages exist).
+
+    Accepts:
+    - CSV string ("Western Europe, North America, ...") -> [{market, percent: None}, ...]
+    - JSON string of dicts -> [{market, percent}, ...]
+    - JSON string of strings -> [{market, percent: None}, ...]
+    - List (already decoded) -> same as above, per element
+    - None / "" -> []
+    """
+    items = []
+    if not raw:
+        return []
+    if isinstance(raw, (list, tuple)):
+        items = list(raw)
+        if not all(isinstance(x, (str, dict)) for x in items):
+            return []
+    else:
+        s = str(raw).strip()
+        if not s:
+            return []
+        if s.startswith(("[", "{")):
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, dict):
+                    items = [parsed]
+                elif isinstance(parsed, list):
+                    items = parsed
+            except (ValueError, TypeError):
+                items = []
+        else:
+            parts = [p.strip() for p in s.split(",") if p.strip()]
+            return [{"market": p, "percent": None} for p in parts]
+    out = []
+    for entry in items:
+        if isinstance(entry, str):
+            text = entry.strip()
+            if text:
+                out.append({"market": text, "percent": None})
+            continue
+        if not isinstance(entry, dict):
+            continue
+        name = (entry.get("market") or entry.get("name") or entry.get("countryName")
+                or entry.get("marketName") or entry.get("country_name") or "")
+        percent = entry.get("percent")
+        if percent is None:
+            percent = entry.get("share") or entry.get("percentage")
+        try:
+            percent = float(percent) if percent not in (None, "") else None
+        except (TypeError, ValueError):
+            percent = None
+        text = str(name).strip()
+        if text:
+            out.append({"market": text, "percent": percent})
+    return out
+
+
 def parse_store_home(modules, subdomain):
     gdc = _module_gdc(modules)
     sign = _module(modules, "icbu-pc-shopSign")
@@ -1212,7 +1272,14 @@ def parse_store_home(modules, subdomain):
         "staff_count": _int(_fv(sign, "authStaffNo")),
         "supplier_stars": _int(sign.get("supplierStars")),
         "main_products": main_products,
-        "main_markets": [m.strip() for m in str(_fv(over, "companyMainMarket") or "").split(",") if m.strip()],
+        "main_markets": _parse_main_markets(
+            _fv(over, "companyMainMarket")
+            or _fv(over, "companyMainMarkets")
+            or _fv(over, "mainMarkets")
+            or _fv(over, "companyMarketList")
+            or _dig(over, "companyMainMarket", "value")
+            or _dig(over, "companyMainMarketList")
+        ),
         "description": _text(_fv(over, "companyDescription") or _fv(over, "supplierAdvantageDescription")),
         "about_images": [u for u in (_image(i) for i in (about_imgs if isinstance(about_imgs, list) else [])) if u],
         "video_cover": _image(_fv(over, "companyVideoPicturePath")),

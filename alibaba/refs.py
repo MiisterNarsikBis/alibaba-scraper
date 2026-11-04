@@ -68,7 +68,7 @@ def resolve_supplier_ref(value):
         if not m:
             raise ValueError("supplier link must be a store link like https://<store>.en.alibaba.com/")
         return m.group(1).lower()
-    if value.isdigit():
+    if value.isdigit() and len(value) > 7:
         raise ValueError("supplier must be the store subdomain (e.g. eptusbchina) or a store link like "
                          "https://eptusbchina.en.alibaba.com/ — numeric company ids cannot be resolved to a store")
     host = value.lower()

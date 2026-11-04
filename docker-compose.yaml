@@ -4,8 +4,9 @@ services:
     restart: unless-stopped
     shm_size: 1g
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       - PORT=8000
       # A residential proxy is strongly recommended — see the README.
-      # - ALIBABA_PROXY=http://user:pass@host:port
+      - ALIBABA_PROXY=${ALIBABA_PROXY:-}
+      - ALIBABA_CACHE=${ALIBABA_CACHE:-0}
