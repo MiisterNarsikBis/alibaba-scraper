@@ -10,6 +10,7 @@ from alibaba.product import product_details, product_reviews
 from alibaba.search import search_by_image, search_products, search_suppliers
 from alibaba.supplier import supplier_details, supplier_products, supplier_reviews
 from route_glue import json_response, route_table
+import proxy_status
 import usage_log
 
 ENDPOINTS = [
@@ -65,6 +66,7 @@ for _path, _handler in (
     ("/usage", _usage_stats),
     ("/usage/recent", _usage_recent),
     ("/usage/clear", _usage_clear),
+    ("/proxy/status", lambda: json_response(proxy_status.status())),
 ):
     route(_path, method="GET")(_handler)
     route("/alibaba" + _path, method="GET")(_handler)

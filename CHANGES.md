@@ -64,6 +64,21 @@ Branch `custom` = our local adaptations, rebased on top of master.
   `docker buildx imagetools inspect chetan1111/botasaurus:chrome-151`, then
   update the digest, rebuild, test.
 
+### `proxy_status.py`, `routes.py` — monitoring endpoint (`GET /proxy/status`)
+JSON for a dashboard (nothing is pushed): service health over the last 24 h
+(calls, errors, Alibaba refusals), proxy traffic used this month, balance, and an
+alert `level` (`ok` / `warn` / `critical`) with human-readable `reasons`.
+Environment, all optional, in `.env`:
+- `DECODO_API_KEY` — API key from the Decodo dashboard (NOT the proxy login).
+  Reads `GET https://api.decodo.com/v2/sub-users/{id}/traffic?type=month`.
+  The docs do not state the unit; `traffic.decodo_vs_measured` compares it with
+  our own metered bytes (~1.0 = GiB, ~1.07 = GB, higher = overhead or other traffic).
+- `DECODO_SUB_USER_ID` — sub-user to read (default: the first one returned).
+- `PROXY_PLAN_GB` — size of the plan for the month; enables the remaining %.
+- `PROXY_WARN_PCT` (20) / `PROXY_CRIT_PCT` (5) — thresholds on the remaining %.
+Critical also when Alibaba refuses >= 5 calls in the last hour; warn above 30 %
+errors over 24 h. Without a key the endpoint still reports our metered bytes.
+
 ## Files added
 
 - **`usage_log.py`** — in-memory ring buffer (1000 entries) for the usage log.
