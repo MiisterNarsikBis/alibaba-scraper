@@ -11,6 +11,12 @@ services:
       - ALIBABA_PROXY=${ALIBABA_PROXY:-}
       - ALIBABA_CACHE=${ALIBABA_CACHE:-0}
       - USAGE_LOG_PATH=/app/data/usage.jsonl
+      # Proxy balance monitoring (see CHANGES.md): all optional, set them in .env
+      - DECODO_API_KEY=${DECODO_API_KEY:-}
+      - DECODO_SUB_USER_ID=${DECODO_SUB_USER_ID:-}
+      - PROXY_PLAN_GB=${PROXY_PLAN_GB:-}
+      - PROXY_WARN_PCT=${PROXY_WARN_PCT:-20}
+      - PROXY_CRIT_PCT=${PROXY_CRIT_PCT:-5}
     volumes:
       # Survives container rebuilds: the usage log (bytes through the proxy) is billing data.
       - ./data:/app/data

@@ -76,6 +76,7 @@ Environment, all optional, in `.env`:
 - `DECODO_SUB_USER_ID` — sub-user to read (default: the first one returned).
 - `PROXY_PLAN_GB` — size of the plan for the month; enables the remaining %.
 - `PROXY_WARN_PCT` (20) / `PROXY_CRIT_PCT` (5) — thresholds on the remaining %.
+`.env` holds the proxy login and the Decodo key: keep it `chmod 600`, never commit it.
 Critical also when Alibaba refuses >= 5 calls in the last hour; warn above 30 %
 errors over 24 h. Without a key the endpoint still reports our metered bytes.
 
