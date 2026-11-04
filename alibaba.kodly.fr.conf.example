@@ -1,0 +1,29 @@
+# API Alibaba Scraper — proxy + auth X-API-Key
+# Token stocké dans /opt/alibaba-scraper/.api-token
+
+<VirtualHost *:443>
+    ServerName alibaba.kodly.fr
+
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/alibaba.kodly.fr/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/alibaba.kodly.fr/privkey.pem
+
+    # N'accepte que les requêtes avec un header X-API-Key valide
+    SetEnvIf X-API-Key "^__API_TOKEN__$" ALLOW_API
+
+    <Proxy *>
+        Require env ALLOW_API
+    </Proxy>
+
+    <Location />
+        Require env ALLOW_API
+        ProxyPass http://127.0.0.1:8000/
+        ProxyPassReverse http://127.0.0.1:8000/
+        ProxyPreserveHost On
+        RequestHeader set X-Forwarded-Proto "https"
+        RequestHeader set X-Forwarded-Host "alibaba.kodly.fr"
+    </Location>
+
+    ErrorLog ${APACHE_LOG_DIR}/alibaba-error.log
+    CustomLog ${APACHE_LOG_DIR}/alibaba-access.log combined
+</VirtualHost>

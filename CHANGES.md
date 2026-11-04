@@ -44,15 +44,23 @@ Branch `custom` = our local adaptations, rebased on top of master.
 ## Files added
 
 - **`usage_log.py`** — in-memory ring buffer (1000 entries) for the usage log.
-- **`alibaba.kodly.fr.conf`** — Apache vhost for `https://alibaba.kodly.fr`
-  with `X-API-Key` auth. Lives in `/etc/apache2/sites-available/`, copied
-  from this folder.
+- **`alibaba.kodly.fr.conf.example`** — template of the Apache vhost for
+  `https://alibaba.kodly.fr` with `X-API-Key` auth. Copy it to
+  `/etc/apache2/sites-available/alibaba.kodly.fr.conf`, replace
+  `__API_TOKEN__` with the real key, then reload Apache. The real file holds
+  the token in clear: it is git-ignored, keep it `chmod 600`, never commit it.
+- **`update.sh`** — pulls upstream and rebases `custom` on top. It asks before
+  rebuilding the container (use `--yes` to skip the question).
 
 ## Files ignored (do not commit)
 
 - `.api-token` — the real X-API-Key. Generated with `openssl rand -hex 32`,
   stored here only for reference, chmod 600.
 - `.env` — proxy credentials. Lives at the repo root.
+- `alibaba.kodly.fr.conf` — the real vhost (contains the API token in clear).
+
+Rotating the API key means changing it in three places: `.api-token`, the
+vhost (`SetEnvIf X-API-Key ...`, then reload Apache) and every client's config.
 
 ## Update workflow
 
@@ -61,8 +69,8 @@ Branch `custom` = our local adaptations, rebased on top of master.
 3. Resolve conflicts (if any). All our changes are described above so they
    are easy to spot.
 4. `docker compose up -d --build` — rebuild with the merged code.
-5. Run `update.sh` (next to this file) to do steps 1-4 in one shot, with
-   a dry-run flag for inspection.
+5. Run `update.sh` (next to this file) to do steps 1-3 in one shot, with
+   a dry-run flag (`--check`) for inspection. It asks before step 4.
 
 ## What is NOT modified
 
