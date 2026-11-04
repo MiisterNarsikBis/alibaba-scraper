@@ -70,6 +70,10 @@ from urllib.parse import quote, urlencode
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
+try:  # byte metering for the proxy quota; never required to serve a request
+    import usage_log  # noqa: E402
+except ImportError:  # pragma: no cover (CLI use outside the app root)
+    usage_log = None
 from scraper_errors import BadRequest, Blocked, NotFound, UpstreamError  # noqa: E402
 
 BASE = "https://www.alibaba.com"
@@ -132,6 +136,24 @@ def dump_debug(name, text):
 _local = threading.local()
 
 
+def _metered(sess):
+    """Count the bytes of every exchange made through this session (every retry too).
+    Wire size = request headers+body sent + response headers+compressed body received."""
+    orig = sess.request
+
+    def request(method, url, *args, **kwargs):
+        resp = orig(method, url, *args, **kwargs)
+        if usage_log is not None:
+            try:
+                usage_log.add_transfer(getattr(resp, "response_size", 0), getattr(resp, "request_size", 0))
+            except Exception:  # measuring must never break a request
+                pass
+        return resp
+
+    sess.request = request
+    return sess
+
+
 def _session():
     """The thread's curl session. With a proxy configured the session holds
     one exit and is rebuilt (= a fresh exit from a rotating provider) after
@@ -144,7 +166,7 @@ def _session():
         sess = None
     if sess is None:
         from curl_cffi import requests as curl_requests
-        sess = curl_requests.Session(impersonate=IMPERSONATE)
+        sess = _metered(curl_requests.Session(impersonate=IMPERSONATE))
         proxy = config.alibaba_proxy()
         if proxy:
             sess.proxies = {"http": proxy, "https": proxy}

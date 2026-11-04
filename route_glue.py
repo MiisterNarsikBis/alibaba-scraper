@@ -80,6 +80,7 @@ def route_call(schema_cls, impl, *, site, path, paginated=False, cache_ttl=None)
     raw = query_dict()
     data, error = load_query(schema_cls, raw)
     started = time.time()
+    usage_log.begin()
     if error:
         usage_log.record(
             endpoint=label, params=raw, cache_hit=False, status=400,

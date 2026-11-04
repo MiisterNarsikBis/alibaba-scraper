@@ -1,4 +1,5 @@
-FROM chetan1111/botasaurus:chrome-151
+# Base image pinned by digest (the tag can move under us). Refresh deliberately, see CHANGES.md.
+FROM chetan1111/botasaurus:chrome-151@sha256:0b94abc9c411b171ba4bae3f447c3746c1d54f7f2cebe397fa999c650a917fae
 
 ENV PYTHONUNBUFFERED=1
 # Never open debug prompts/devtools on crash.

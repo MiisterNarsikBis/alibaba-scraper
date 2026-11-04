@@ -16,3 +16,6 @@ venv/
 
 # Real Apache vhost holds the API token in clear: only the .example is versioned
 alibaba.kodly.fr.conf
+
+# Persisted usage log (billing data)
+data/

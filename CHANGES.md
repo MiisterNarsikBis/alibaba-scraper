@@ -41,6 +41,29 @@ Branch `custom` = our local adaptations, rebased on top of master.
 - Environment: `ALIBABA_PROXY=${ALIBABA_PROXY:-}` (uncommented) and
   `ALIBABA_CACHE=${ALIBABA_CACHE:-0}` (added).
 
+### `alibaba/fetch.py`, `route_glue.py`, `usage_log.py` — proxy byte metering
+- **`fetch.py`**: every curl session is wrapped (`_metered`) so each exchange
+  (every retry too) adds `response_size + request_size` (compressed bytes on
+  the wire, headers included) to the current request's counters.
+- **`route_glue.py`**: `usage_log.begin()` at the start of each request.
+- **`usage_log.py`** (rewritten): per-call `bytes_down` / `bytes_up` /
+  `upstream_requests`, persisted as JSON lines in `USAGE_LOG_PATH`
+  (`/app/data/usage.jsonl`, rotated at 50 MB), reloaded at startup.
+  `GET /usage` keeps the old ring-buffer keys and adds `lifetime`
+  (whole history: calls, bytes, `month_bytes`, `bytes_by_endpoint`,
+  `by_day`). **Use `lifetime` for deltas**: the ring buffer caps at 1000.
+  Bytes are a LOWER bound: TLS/CONNECT handshakes (~5-7 KB per new connection)
+  and the real-Chrome surface `/suppliers/search` are not metered.
+  `GET /usage/clear` now also deletes the persisted file.
+
+### `docker-compose.yaml`, `Dockerfile`, `requirements.txt` — hardening
+- compose: `./data:/app/data` volume (usage log survives rebuilds), log
+  rotation (10 MB x 5), healthcheck on `/usage`.
+- `requirements.txt` pinned to the versions that were running on 2026-11-04.
+- `Dockerfile`: base image pinned by digest. To refresh deliberately:
+  `docker buildx imagetools inspect chetan1111/botasaurus:chrome-151`, then
+  update the digest, rebuild, test.
+
 ## Files added
 
 - **`usage_log.py`** — in-memory ring buffer (1000 entries) for the usage log.

@@ -10,3 +10,18 @@ services:
       # A residential proxy is strongly recommended — see the README.
       - ALIBABA_PROXY=${ALIBABA_PROXY:-}
       - ALIBABA_CACHE=${ALIBABA_CACHE:-0}
+      - USAGE_LOG_PATH=/app/data/usage.jsonl
+    volumes:
+      # Survives container rebuilds: the usage log (bytes through the proxy) is billing data.
+      - ./data:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/usage', timeout=5).status == 200 else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
