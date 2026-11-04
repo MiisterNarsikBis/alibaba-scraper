@@ -41,7 +41,9 @@ def _decodo():
         return _cache["value"]
 
     def get(path):
-        req = urllib.request.Request(_API + path, headers={"Authorization": key, "Accept": "application/json"})
+        # Documented format: `Authorization: <api key>` + `accept: application/json`. An explicit User-Agent is needed:
+        # urllib's default one is commonly refused (403) by API gateways.
+        req = urllib.request.Request(_API + path, headers={"Authorization": key, "accept": "application/json", "User-Agent": "alibaba-scraper-proxy-monitor/1.0"})
         with urllib.request.urlopen(req, timeout=15) as r:
             return json.loads(r.read().decode("utf-8"))
 
